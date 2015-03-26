@@ -168,12 +168,8 @@ class BaseRecipe(object):
         self.vcs_clear_locks = clear_locks == 'true'
         clear_retry = options.get('vcs-clear-retry', '').lower()
         self.clear_retry = clear_retry == 'true'
-        self.jailroot_buildout_dir = options.get('jailroot-buildout-dir')
         self.python_scripts_executable = options.get(
             'python-scripts-executable')
-
-        if self.jailroot_buildout_dir:
-            options['relative-paths'] = 'true'
 
         # same as in zc.recipe.eggs
         relative_paths = options.get(

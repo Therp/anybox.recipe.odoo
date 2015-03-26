@@ -330,10 +330,9 @@ conf = openerp.tools.config
         script_source_path = self.make_absolute(script[0])
         desc.update(
             entry='openerp_upgrader',
-            arguments='%s, %r, %r, %r' % (
-                script_source_path, script[1],
-                self._relativitize(self.config_path),
-                self.jailroot_buildout_dir or self.buildout_dir),
+            arguments='%s, %r, %s' % (
+                self._relativitize(script_source_path), script[1],
+                self._relativitize(self.config_path))
         )
 
         if not os.path.exists(script_source_path):
@@ -436,9 +435,9 @@ conf = openerp.tools.config
         initialization = os.linesep.join((
             "",
             "from anybox.recipe.odoo.runtime.session import Session",
-            "session = Session(%s, %r)" % (
-                self._relativitize(self.config_path),
-                self.jailroot_buildout_dir or self.buildout_dir),
+            "session = Session(%s, base)" % self._relativitize(
+                self.config_path)
+,
             "if len(sys.argv) <= 1:",
             "    print('To start the Odoo working session, just do:')",
             "    print('    session.open(db=DATABASE_NAME)')",
@@ -478,10 +477,8 @@ conf = openerp.tools.config
         common_init = os.linesep.join((
             "",
             "from anybox.recipe.odoo.runtime.session import Session",
-            "session = Session(%s, %r)" % (
-                self._relativitize(self.config_path),
-                self.jailroot_buildout_dir or self.buildout_dir),
-        ))
+            "session = Session(%s, base)" % self._relativitize(
+                self.config_path)))
 
         for script_name, desc in self.openerp_scripts.items():
             initialization = desc.get('initialization', common_init)

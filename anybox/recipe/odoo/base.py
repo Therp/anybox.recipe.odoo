@@ -617,11 +617,11 @@ class BaseRecipe(object):
         Rewrite the addons path if we are preparing a buildout
         for a jail root
         """
-        if self.jailroot_buildout_dir:
+        if self._relative_paths:
             relative_addons_path = _relative_path(
                 self._relative_paths, addons_path)
             return os.path.join(
-                self.jailroot_buildout_dir, relative_addons_path)
+                '..', '..', relative_addons_path)
         return addons_path
 
     def retrieve_addons(self):

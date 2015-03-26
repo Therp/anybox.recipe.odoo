@@ -258,7 +258,7 @@ conf = openerp.tools.config
             if (common == self._relative_paths or
                     common.startswith(os.path.join(self._relative_paths, ''))):
                 return "join(base, %r)" % _relative_path(common, path)
-        return path
+        return "%r" % path
 
     def _register_main_startup_script(self, qualified_name):
         """Register main startup script, usually ``start_openerp`` for install.
@@ -266,7 +266,7 @@ conf = openerp.tools.config
         desc = self._get_or_create_script('openerp_starter',
                                           name=qualified_name)[1]
 
-        arguments = '%r, %r, version=%r, gevent_script_path=%r' % (
+        arguments = '%s, %s, version=%r, gevent_script_path=%s' % (
             self._relativitize(self._get_server_command()),
             self._relativitize(self.config_path),
             self.major_version,
@@ -300,7 +300,7 @@ conf = openerp.tools.config
         """
         desc = self._get_or_create_script('openerp_tester',
                                           name=qualified_name)[1]
-        arguments = '%r, %r, version=%r, just_test=True' % (
+        arguments = '%s, %s, version=%r, just_test=True' % (
             self._relativitize(self._get_server_command()),
             self._relativitize(self.config_path),
             self.major_version)
@@ -330,7 +330,7 @@ conf = openerp.tools.config
         script_source_path = self.make_absolute(script[0])
         desc.update(
             entry='openerp_upgrader',
-            arguments='%r, %r, %r, %r' % (
+            arguments='%s, %r, %r, %r' % (
                 script_source_path, script[1],
                 self._relativitize(self.config_path),
                 self.jailroot_buildout_dir or self.buildout_dir),
@@ -419,7 +419,7 @@ conf = openerp.tools.config
         desc = self._get_or_create_script('openerp_cron_worker',
                                           name=qualified_name)[1]
         desc.update(entry='openerp_cron_worker',
-                    arguments='%r, %r' % (
+                    arguments='%r, %s' % (
                         script_src,
                         self._relativitize(self.config_path)),
                     initialization='',
@@ -436,7 +436,7 @@ conf = openerp.tools.config
         initialization = os.linesep.join((
             "",
             "from anybox.recipe.odoo.runtime.session import Session",
-            "session = Session(%r, %r)" % (
+            "session = Session(%s, %r)" % (
                 self._relativitize(self.config_path),
                 self.jailroot_buildout_dir or self.buildout_dir),
             "if len(sys.argv) <= 1:",
@@ -478,7 +478,7 @@ conf = openerp.tools.config
         common_init = os.linesep.join((
             "",
             "from anybox.recipe.odoo.runtime.session import Session",
-            "session = Session(%r, %r)" % (
+            "session = Session(%s, %r)" % (
                 self._relativitize(self.config_path),
                 self.jailroot_buildout_dir or self.buildout_dir),
         ))

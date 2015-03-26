@@ -250,14 +250,9 @@ conf = openerp.tools.config
             return name, desc
 
     def _relativitize(self, path):
-        """Inspired from easy_install"""
         if self._relative_paths:
-            eggs = os.path.normcase(os.path.abspath(
-                self.b_options['eggs-directory']))
-            common = os.path.dirname(os.path.commonprefix([path, eggs]))
-            if (common == self._relative_paths or
-                    common.startswith(os.path.join(self._relative_paths, ''))):
-                return "join(base, %r)" % os.path.relpath(path, common)
+            return "join(base, %r)" % os.path.relpath(
+                path, self._relative_paths)
         return "%r" % path
 
     def _register_main_startup_script(self, qualified_name):
@@ -419,8 +414,7 @@ conf = openerp.tools.config
                                           name=qualified_name)[1]
         desc.update(entry='openerp_cron_worker',
                     arguments='%r, %s' % (
-                        script_src,
-                        self._relativitize(self.config_path)),
+                        script_src, self._relativitize(self.config_path)),
                     initialization='',
                     )
 

@@ -593,16 +593,6 @@ class BaseRecipe(object):
             self.sources[local_path] = ((source[0], (source[1][0], revision))
                                         + source[2:])
 
-    def rewrite_addons_path(self, addons_path):
-        """
-        Rewrite the addons path if we are preparing a buildout
-        for a jail root
-        """
-        if self._relative_paths:
-            return os.path.relpath(
-                addons_path, os.path.join(self.openerp_dir, 'openerp'))
-        return addons_path
-
     def retrieve_addons(self):
         """Peform all lookup and downloads specified in :attr:`sources`.
 
@@ -1354,11 +1344,13 @@ class BaseRecipe(object):
                 assert os.path.isdir(path), (
                     "Not a directory: %r (aborting)" % path)
 
-        addons_paths = list(self.addons_paths)
         self.addons_paths = [
-            self.rewrite_addons_path(addons_path)
-            for addons_path in addons_paths
-            ]
+            os.path.relpath(
+                addons_path, os.path.join(self.openerp_dir, 'openerp'))
+            if self._relative_paths
+            else addons_path
+            for addons_path in list(self.addons_paths)
+        ]
         self.options['options.addons_path'] = ','.join(self.addons_paths)
 
     def insert_odoo_git_addons(self, base_addons):

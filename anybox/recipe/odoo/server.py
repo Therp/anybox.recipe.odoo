@@ -413,8 +413,9 @@ conf = openerp.tools.config
         desc = self._get_or_create_script('openerp_cron_worker',
                                           name=qualified_name)[1]
         desc.update(entry='openerp_cron_worker',
-                    arguments='%r, %s' % (
-                        script_src, self._relativitize(self.config_path)),
+                    arguments='%s, %s' % (
+                        self._relativitize(script_src),
+                        self._relativitize(self.config_path)),
                     initialization='',
                     )
 
@@ -430,8 +431,7 @@ conf = openerp.tools.config
             "",
             "from anybox.recipe.odoo.runtime.session import Session",
             "session = Session(%s, base)" % self._relativitize(
-                self.config_path)
-,
+                self.config_path),
             "if len(sys.argv) <= 1:",
             "    print('To start the Odoo working session, just do:')",
             "    print('    session.open(db=DATABASE_NAME)')",

@@ -6,7 +6,7 @@ import shutil
 import logging
 import zc.buildout
 from zc.buildout import UserError
-from base import BaseRecipe,  _relative_path
+from base import BaseRecipe
 from . import devtools
 from .utils import option_splitlines, option_strip
 
@@ -257,7 +257,7 @@ conf = openerp.tools.config
             common = os.path.dirname(os.path.commonprefix([path, eggs]))
             if (common == self._relative_paths or
                     common.startswith(os.path.join(self._relative_paths, ''))):
-                return "join(base, %r)" % _relative_path(common, path)
+                return "join(base, %r)" % os.path.relpath(path, common)
         return "%r" % path
 
     def _register_main_startup_script(self, qualified_name):

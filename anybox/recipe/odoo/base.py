@@ -40,21 +40,6 @@ def rfc822_time(h):
     rfc822.mktime_tz(rfc822.parsedate_tz(h))
 
 
-def _relative_path(common, path):
-    """Copied from easy_install"""
-    r = []
-    while 1:
-        dirname, basename = os.path.split(path)
-        r.append(basename)
-        if dirname == common:
-            break
-        if dirname == path:
-            raise AssertionError("dirname of %s is the same" % dirname)
-        path = dirname
-    r.reverse()
-    return os.path.join(*r)
-
-
 class MainSoftware(object):
     """Placeholder to represent the main software instead of an addon location.
 
@@ -614,10 +599,8 @@ class BaseRecipe(object):
         for a jail root
         """
         if self._relative_paths:
-            relative_addons_path = _relative_path(
-                self._relative_paths, addons_path)
-            return os.path.join(
-                '..', '..', relative_addons_path)
+            return os.path.relpath(
+                addons_path, os.path.join(self.openerp_dir, 'openerp'))
         return addons_path
 
     def retrieve_addons(self):

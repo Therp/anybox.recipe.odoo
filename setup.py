@@ -9,11 +9,15 @@ if sys.version_info < (2, 6):
                      "Yours is " + sys.version + os.linesep)
     sys.exit(1)
 
-requires = ['setuptools', 'zc.recipe.egg', 'zc.buildout>=2.2.0']
+# a sufficient version of pip is needed to parse Odoo requirement file
+# version 1.4.1 is the one required by reportlab anyway
+requires = ['setuptools', 'zc.recipe.egg', 'zc.buildout>=2.2.0', 'pip>=1.4.1']
 
 if sys.version_info < (2, 7):
     requires.append('ordereddict')
     requires.append('argparse')
+
+tests_require = ['nose', 'bzr']
 
 setup(
     name="anybox.recipe.odoo",
@@ -31,7 +35,7 @@ setup(
     zip_safe=False,
     include_package_data=True,
     install_requires=requires,
-    tests_require=requires + ['nose', 'bzr'],
+    tests_require=requires + tests_require,
     classifiers=[
         'Development Status :: 4 - Beta',
         'Framework :: Buildout :: Recipe',
@@ -45,5 +49,8 @@ setup(
     entry_points={'zc.buildout': [
         'server = anybox.recipe.odoo.server:ServerRecipe',
     ]},
-    extras_require={'bzr': ['bzr']},
+    extras_require={
+        'bzr': ['bzr'],
+        'test': tests_require,
+    },
 )

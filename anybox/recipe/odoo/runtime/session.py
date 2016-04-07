@@ -162,7 +162,8 @@ class Session(object):
         cr.close()
 
         startup.check_root_user()
-        startup.check_postgres_user()
+        if not os.environ.get('ENABLE_POSTGRES_USER'):
+            startup.check_postgres_user()
         openerp.netsvc.init_logger()
 
         saved_without_demo = config['without_demo']
@@ -178,6 +179,10 @@ class Session(object):
         self.init_cursor()
         self.uid = SUPERUSER_ID
         self.init_environments()
+        self.context = self.registry('res.users').context_get(
+            self.cr, self.uid)
+        if hasattr(openerp, 'api'):
+            self.env = openerp.api.Environment(self.cr, self.uid, self.context)
 
     def init_environments(self):
         """Enter the environments context manager, but don't leave it

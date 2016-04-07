@@ -80,7 +80,7 @@ class ServerRecipe(BaseRecipe):
             logger.warn("'gunicorn = proxied' now superseded since "
                         "OpenERP 7 by the 'proxy_mode' Odoo server option ")
 
-    def merge_requirements(self):
+    def merge_requirements(self, reqs=None):
         """Prepare for installation by zc.recipe.egg
 
          - develop the openerp distribution and require it
@@ -104,7 +104,7 @@ class ServerRecipe(BaseRecipe):
         if self.with_devtools:
             self.requirements.extend(devtools.requirements)
 
-        BaseRecipe.merge_requirements(self)
+        BaseRecipe.merge_requirements(self, reqs=reqs)
         return openerp_project_name
 
     def _create_default_config(self):
@@ -394,8 +394,9 @@ conf = openerp.tools.config
         script_src = join(self.openerp_dir, 'openerp-cron-worker')
         if not os.path.isfile(script_src):
             version = self.version_detected
-            if ((version.startswith('6.1-2012') and version[4:12] < '20120530')
-                    or self.version_wanted == '6.1-1'):
+            if self.version_wanted == '6.1-1' or (
+                    version.startswith('6.1-2012') and
+                    version[4:12] < '20120530'):
                 logger.warn(
                     "Can't use openerp-cron-worker with version %s "
                     "You have to run a separate regular Odoo process "
@@ -441,9 +442,14 @@ conf = openerp.tools.config
             "    print('All other options from buildout part config "
             "do apply.')",
             ""
-            "    print('Then you can issue commands such as')",
-            "    print(\"    "
-            "    session.registry('res.users').browse(session.cr, 1, 1)\")"
+            "    print('Then you can issue commands such as:')",
+            "    print(\""
+            "    session.registry('res.users').browse(session.cr, 1, 1)\")",
+            "    from openerp import release",
+            "    from anybox.recipe.odoo.utils import major_version",
+            "    if major_version(release.version)[0] >= 8:",
+            "        print('Or using new api:')",
+            "        print(\"    session.env['res.users'].browse(1)\")"
             ""))
 
         reqs, ws = self.eggs_reqs, self.eggs_ws

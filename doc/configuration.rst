@@ -345,6 +345,10 @@ To do so, the recipe must perform first a broader fetch, then hope the
 wished commit has become available locally. The ``branch`` option
 narrows said fetch for better efficiency and reliability.
 
+Because of the potential problems mentioned above, the recipe emits a
+warning when coming across a SHA pin. You can disable this warning by
+setting ``git-warn-sha-pins = False``.
+
 .. note:: the ``branch`` option is new in vertion 1.9.1
 
 .. warning:: non tagged commits can become unreachable, especially
@@ -379,6 +383,56 @@ eggs needed by addons, or just useful ones::
     eggs = ipython
            python-ldap
            openobject-library
+
+.. _apply_requirements_file:
+
+apply-requirements-file
+-----------------------
+
+Default value: ``False``
+
+If set to ``True``, this boolean option makes the recipe read Odoo's
+``requirements.txt`` file if available, and apply its prescriptions.
+
+Precedence among requirements
+`````````````````````````````
+In short, Odoo's requirement file has the lowest precedence of all
+systems that can manage versions of Python libraries within the recipe context:
+
+* ``zc.buildout`` comes with its own native way of expressing wished
+  Python versions, with a dedicated configuration section, which is by default
+  ``[versions]``. This native system has precedence over the contents of
+  Odoo's requirement file.
+* all kinds of ``develop`` directives have precedence over Odoo's
+  requirement file. This includes the ``vcs-extend-develop`` of the
+  ``gp.vcsdevelop`` extension.
+
+Requirements file limitations
+`````````````````````````````
+
+In case the requirements file you use is not properly supported, we
+suggest as a workaround to you convert it temporarily to
+``[versions]`` statements, and get in touch with the recipe's
+developers.
+
+.. note:: At the time of this writing, the ``requirements.txt`` file shipping
+          within Odoo's main 8.0 branch is fully supported, but :
+
+          * you are free to use any alternative branch, including your
+            own baked
+          * the mainline requirements file may change in the future.
+
+Only a small subset of the `pip's requirement specifiers
+<https://pip.pypa.io/en/latest/reference/pip_install.html#requirement-specifiers>`_
+is actually supported, notably:
+
+* version inequalities, such as ``>=2.0`` and boolean expressions are
+  not currently implemented. They will be if needed, and you should
+  get an understandable message about the condition being "too complicated"
+* no specifier involving network operations is supported. In
+  particular, the VCS URLs are not (to workaround that, use
+  ``gp.vcsdevelop``), and the ``-r`` (``--requirements``) specifiers
+  work for local files only (path relative to the Odoo part directory).
 
 .. _revisions:
 
@@ -906,14 +960,16 @@ The recipe will automatically create a python interpreter with a
 ``session`` object that can bootstrap Odoo with a database right
 away. You can use that for interactive sessions or to launch a script::
 
-    $ bin/python_openerp
+    $ bin/python_odoo
     To start the Odoo working session, just do:
-       session.open()
-    or
-       session.open(db=DATABASE_NAME)
-    Then you can issue commands such as
-       session.registry('res.users').browse(session.cr, 1, 1)
-
+        session.open(db=DATABASE_NAME)
+    or, to use the database from the buildout part config:
+        session.open()
+    All other options from buildout part config do apply.
+    Then you can issue commands such as:
+        session.registry('res.users').browse(session.cr, 1, 1)
+    Or using new api:
+        session.env['res.users'].browse(1)
     >>>
 
 The interpreter name is  ``python_<part_name>`` by default; but it can
@@ -925,9 +981,14 @@ If you want *not* to have the interpreter, juste do
 
     interpreter_name =
 
-If you want to wrap a python script with such session objects, read
-:doc:`/scripts` and especially :ref:`arguments_session`.
-See also :ref:`openerp_scripts`.
+If you want to wrap a python script with such session objects you need to use
+the :ref:`openerp_scripts` option. See :doc:`/scripts` and especially
+:ref:`arguments_session`.
+
+If you want a more comfortable Python console like
+`IPython <http://ipython.org>`_ or
+`bPython <http://bpython-interpreter.org>`_, take a
+look at :ref:`interactive_consoles`.
 
 .. note:: this facility is new in version 1.6.0, and tested with
           OpenERP ≥ 6.1 only for now.
@@ -936,7 +997,7 @@ See also :ref:`openerp_scripts`.
 interpreter
 -----------
 With the ``gtkclient`` and ``webclient`` recipes,
-this behauves like the `interpreter` option of `zc.recipe.egg`: it
+this behaves like the `interpreter` option of `zc.recipe.egg`: it
 gives you a Python interpreter in the ``bin`` subdirectory of the buildout::
 
     interpreter = erp_python

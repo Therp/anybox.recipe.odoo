@@ -20,17 +20,17 @@ except ImportError:  # Python < 2.7
 from zc.buildout.easy_install import MissingDistribution
 from zc.buildout import UserError
 from zc.buildout.easy_install import VersionConflict
+from zc.buildout.easy_install import Installer
 
 from zc.buildout.easy_install import IncompatibleConstraintError
 
 import zc.recipe.egg
-
 import httplib
 import rfc822
 from urlparse import urlparse
 from . import vcs
 from . import utils
-from .utils import option_splitlines, option_strip
+from .utils import option_splitlines, option_strip, conf_ensure_section
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,8 @@ main_software = MainSoftware()
 
 GP_VCS_EXTEND_DEVELOP = 'vcs-extend-develop'
 GP_DEVELOP_DIR = 'develop-dir'
+
+WITH_ODOO_REQUIREMENTS_FILE_OPTION = 'apply-requirements-file'
 
 
 class BaseRecipe(object):
@@ -138,6 +140,21 @@ class BaseRecipe(object):
     directory right next to the ``openerp`` package.
     """
 
+    with_odoo_requirements_file = False
+    """Whether attempt to use the 'requirements.txt' shipping with Odoo"""
+
+    def bool_opt_get(self, name, is_global=False):
+        """Retrieve an option and interpret it as boolean.
+
+        Factorized to improve code readability.
+
+        :param is_global: if ``True``, the option is taken from the
+                          global buildout options instead of the part
+                          taken care of by this recipe instance.
+        """
+        options = self.b_options if is_global else self.options
+        return options.get(name, '').lower() == 'true'
+
     def __init__(self, buildout, name, options):
         self.requirements = list(self.requirements)
         self.recipe_requirements_path = []
@@ -155,6 +172,13 @@ class BaseRecipe(object):
         self.clear_retry = clear_retry == 'true'
         self.python_scripts_executable = options.get(
             'python-scripts-executable')
+
+        if self.bool_opt_get(WITH_ODOO_REQUIREMENTS_FILE_OPTION):
+            logger.debug("%s option: adding 'pip' to the recipe requirements",
+                         WITH_ODOO_REQUIREMENTS_FILE_OPTION)
+            self.with_odoo_requirements_file = True
+            self.recipe_requirements = list(self.recipe_requirements)
+            self.recipe_requirements.append('pip')
 
         # same as in zc.recipe.eggs
         relative_paths = options.get(
@@ -290,14 +314,145 @@ class BaseRecipe(object):
         _, ws = eggs.working_set()
         self.recipe_requirements_paths = [ws.by_key[dist].location
                                           for dist in to_install]
-        sys.path.extend(self.recipe_requirements_paths)
+        # Some earlier processing leaves tmp dirs behind, that may
+        # mask what we just installed (especially harmful in case of pip)
+        sys.path[0:0] = self.recipe_requirements_paths
 
-    def merge_requirements(self):
-        """Merge eggs option with self.requirements."""
+    def merge_requirements(self, reqs=None):
+        """Merge eggs option with self.requirements.
+
+
+        TODO refactor all this: merge requirements is not idempotent, it
+        appends. Overall, this going back and forth between the serialized
+        form (self.options['eggs']) and the parsed version has growed too
+        much, up to the point where it's not natural at all.
+        """
+        if reqs is None:
+            reqs = self.requirements
+        serial = '\n'.join(reqs)
+
         if 'eggs' not in self.options:
-            self.options['eggs'] = '\n'.join(self.requirements)
+            self.options['eggs'] = serial
         else:
-            self.options['eggs'] += '\n' + '\n'.join(self.requirements)
+            self.options['eggs'] += '\n' + serial
+
+    def list_develops(self):
+        """At any point in time, list the projects that have been developed.
+
+        This can work as soon as the recipe is instantiated
+        (because the 'buildout' part) has already been executed.
+        In particular, it does not rely on the workingset init done by
+        :class:`zc.buildout.easy_install.Installer` and
+        can be used in precedence rules that need to be executed before calling
+        the Installer indirectly via ``zc.recipe.eggs``
+
+        :return: list of project names
+
+        Implementation simply lists the develop eggs directory
+        There's probably better to be done.
+        """
+        devdir_contents = (f.rsplit('.', 1) for f in os.listdir(
+            self.b_options['develop-eggs-directory']))
+        return [s[0] for s in devdir_contents if s[1] == 'egg-link']
+
+    def apply_odoo_requirements_file(self):
+        """Try and read Odoo's 'requirements.txt' and apply it.
+
+        This file appeared in the course of Odoo 8 lifetime. If not available,
+        a warning is issued, that's all.
+
+        Entries from the requirements file are applied if there is not already
+        an entry in the versions section for the same project.
+
+        A more interesting behaviour would be to apply then if they don't
+        contradict an existing entry in the versions section, but that's far
+        more complicated.
+        """
+        req_fname = 'requirements.txt'
+        req_path = join(self.openerp_dir, req_fname)
+        if not os.path.exists(req_path):
+            logger.warn("%r not found in this version of "
+                        "Odoo, although the configuration said to use it. "
+                        "Proceeding anyway.", req_fname)
+            return
+
+        # pip wouldn't be importable before the call to
+        # install_recipe_requirements()
+
+        # if an extension has used pip before, it can be left in a
+        # strange state where pip.req is not usable nor reloadable
+        # anymore. (may have something to do with the fact that the
+        # first import is done from a tmp dir
+        # that does not exist any more).
+        # So, better to clean that before hand.
+        for k in sys.modules.keys():
+            if k.split('.', 1)[0] == 'pip':
+                del sys.modules[k]
+
+        # it is useless to mutate the versions section at this point
+        # it's already been used to populate the Installer class variable
+        versions = Installer._versions
+        develops = self.list_develops()
+
+        new_reqs = set()
+        from pip.req import parse_requirements
+        # pip internals are protected against the fact of not passing
+        # a session with ``is None``. OTOH, the session is not used
+        # if the file is local (direct path, not an URL), so we cheat
+        # it.
+        fake_session = object()
+        for inst_req in parse_requirements(req_path, session=fake_session):
+            req = inst_req.req
+            logger.debug("Considering requirement from Odoo's file %s",
+                         req)
+            # GR something more interesting would be to apply the
+            # requirement if it does not contradict an existing one.
+            # For now that's too much complicated, but check later if
+            # zc.buildout.easy_install._constrain() fits the bill.
+
+            project_name = req.project_name
+            if project_name not in self.requirements:
+                # TODO maybe convert self.requirements to a set (in
+                # next unstable branch)
+                self.requirements.append(project_name)
+
+            if project_name in versions:
+                logger.debug("Requirement from Odoo's file %s superseded "
+                             "by buildout versions configuration as %r",
+                             req, versions[project_name])
+                continue
+
+            if project_name in develops:
+                logger.debug("Requirement from Odoo's file %s superseded "
+                             "by a direct develop directive", req)
+                continue
+
+            if not req.specs:
+                continue
+
+            supported = True
+
+            if len(req.specs) > 1:
+                supported = False
+            spec = req.specs[0]
+            if spec[0] != '==':
+                supported = False
+
+            if not supported:
+                raise UserError(
+                    "Version requirement %s from Odoo's requirement file "
+                    "is too complicated to be taken automatically into "
+                    "account. Please translate it in your [%s] "
+                    "configuration section and, "
+                    "if from a public fork of Odoo, report this as a "
+                    "request for improvement on the buildout recipe." % (
+                        req, self.b_options.get('versions', 'versions')))
+
+            logger.debug("Applying requirement %s from Odoo's file",
+                         req)
+            versions[project_name] = spec[1]
+
+        self.merge_requirements(reqs=new_reqs)
 
     def install_requirements(self):
         """Install egg requirements and scripts.
@@ -305,6 +460,9 @@ class BaseRecipe(object):
         If some distributions are known as soft requirements, will retry
         without them
         """
+        if self.with_odoo_requirements_file:
+            self.apply_odoo_requirements_file()
+
         while True:
             missing = None
             eggs_recipe = zc.recipe.egg.Scripts(self.buildout, '',
@@ -328,9 +486,9 @@ class BaseRecipe(object):
             else:
                 break
 
-            logger.error("Could not find or install %r. "
-                         + self.missing_deps_instructions.get(missing, '')
-                         + " Original exception %s.%s says: %s",
+            logger.error("Could not find or install %r. " +
+                         self.missing_deps_instructions.get(missing, '') +
+                         " Original exception %s.%s says: %s",
                          missing,
                          exc.__class__.__module__, exc.__class__.__name__, exc)
             if missing not in self.soft_requirements:
@@ -408,8 +566,8 @@ class BaseRecipe(object):
                         self.read_release()
                     except Exception as exc:
                         raise EnvironmentError(
-                            'Problem while reading Odoo release.py: '
-                            + exc.message)
+                            'Problem while reading Odoo release.py: ' +
+                            exc.message)
             except ImportError, exception:
                 if 'babel' in exception.message:
                     raise EnvironmentError(
@@ -590,8 +748,9 @@ class BaseRecipe(object):
                                 "for non-vcs source" % line)
 
             logger.info("%s will be on revision %r", local_path, revision)
-            self.sources[local_path] = ((source[0], (source[1][0], revision))
-                                        + source[2:])
+            self.sources[local_path] = (
+                (source[0], (source[1][0], revision)) + source[2:]
+            )
 
     def retrieve_addons(self):
         """Peform all lookup and downloads specified in :attr:`sources`.
@@ -781,9 +940,10 @@ class BaseRecipe(object):
                 utils.clean_object_files(self.openerp_dir)
         elif type_spec == 'downloadable':
             # download if needed
-            if ((self.archive_path and not os.path.exists(self.archive_path))
-                or (self.main_http_caching == 'http-head'
-                    and self.is_stale_http_head())):
+            if ((self.archive_path and
+                 not os.path.exists(self.archive_path)) or
+                (self.main_http_caching == 'http-head' and
+                 self.is_stale_http_head())):
                 self.main_download()
 
             logger.info(u'Inspecting %s ...' % self.archive_path)
@@ -835,8 +995,8 @@ class BaseRecipe(object):
         freeze_to = self.options.get('freeze-to')
         extract_downloads_to = self.options.get('extract-downloads-to')
 
-        if ((freeze_to is not None or extract_downloads_to is not None)
-                and not self.offline):
+        if ((freeze_to is not None or extract_downloads_to is not None) and
+                not self.offline):
             raise UserError("To freeze a part, you must run offline "
                             "so that there's no modification from what "
                             "you just tested. Please rerun with -o.")
@@ -853,8 +1013,8 @@ class BaseRecipe(object):
         os.chdir(self.openerp_dir)  # GR probably not needed any more
         self.read_openerp_setup()
 
-        if (self.sources[main_software][0] == 'downloadable'
-                and self.version_wanted == 'latest'):
+        if (self.sources[main_software][0] == 'downloadable' and
+                self.version_wanted == 'latest'):
             self.nightly_version = self.version_detected.split('-', 1)[1]
             logger.warn("Detected 'nightly latest version', you may want to "
                         "fix it in your config file for replayability: \n    "
@@ -884,8 +1044,7 @@ class BaseRecipe(object):
             if '.' not in recipe_option:
                 continue
             section, option = recipe_option.split('.', 1)
-            if not config.has_section(section):
-                config.add_section(section)
+            conf_ensure_section(config, section)
             config.set(section, option, self.options[recipe_option])
         with open(self.config_path, 'wb') as configfile:
             config.write(configfile)
@@ -919,9 +1078,11 @@ class BaseRecipe(object):
         else:
             self._prepare_frozen_buildout(out_conf)
 
+        # The name the versions section is hardcoded, but that's tolerable
+        # because that's actually the one we *produce*
         self._freeze_egg_versions(out_conf, 'versions')
 
-        out_conf.add_section(self.name)
+        conf_ensure_section(out_conf, self.name)
         addons_option = []
         self.local_modifications = []
         for local_path, source in self.sources.items():
@@ -999,11 +1160,22 @@ class BaseRecipe(object):
                          "you ever run that buildout ?")
             raise
 
+        if 'parse_editable' in dir(pip.req):  # pip < 6.0
+            def parse_egg_dir(req_str):
+                return pip.req.parse_editable(req_str)[0]
+        else:
+            def parse_egg_dir(req_str):
+                ireq = pip.req.InstallRequirement.from_editable(req_str)
+                # GR I'm worried because now this is also used as project
+                # name in requirement, whereas it used to just be the target
+                # directory
+                return ireq.editable_options['egg']
+
         ret = []
         for raw in option_splitlines(lines):
-            parsed = pip.req.parse_editable(raw)
-            abs_path = os.path.join(base_path, parsed[0])
-            ret.append((raw, parsed, sub_dir, abs_path))
+            target = parse_egg_dir(raw)
+            abs_path = os.path.join(base_path, target)
+            ret.append((raw, target, sub_dir, abs_path))
         return tuple(ret)
 
     def _prepare_frozen_buildout(self, conf):
@@ -1048,13 +1220,20 @@ class BaseRecipe(object):
 
     def _freeze_egg_versions(self, conf, section, exclude=()):
         """Update a ConfigParser section with current working set egg versions.
+
+        This also forces not to use the requirements file from Odoo, hence
+        avoiding a deploy-time dependency on pip for something that is not
+        needed and could only be a source of issues.
         """
+        conf_ensure_section(conf, self.name)
+        conf.set(self.name, WITH_ODOO_REQUIREMENTS_FILE_OPTION, 'False')
+
         versions = dict((name, conf.get(section, name))
                         for name in conf.options(section))
         versions.update((name, egg.version)
                         for name, egg in self.ws.by_key.items()
-                        if name not in exclude
-                        and egg.precedence != pkg_resources.DEVELOP_DIST
+                        if name not in exclude and
+                        egg.precedence != pkg_resources.DEVELOP_DIST
                         )
         for name, version in versions.items():
             conf.set(section, name, version)
@@ -1140,7 +1319,7 @@ class BaseRecipe(object):
 
         if not os.path.exists(target_dir):
             os.mkdir(target_dir)
-        out_conf.add_section(self.name)
+        conf_ensure_section(out_conf, self.name)
 
         # remove bzr extra if needed
         pkg_extras, recipe_cls = self.options['recipe'].split(':')
@@ -1275,8 +1454,8 @@ class BaseRecipe(object):
         develops = set(option_splitlines(self.b_options.get('develop')))
 
         extracted = set()
-        for raw, parsed, sub_dir, abs_path in self._get_gp_vcs_develops():
-            target_sub_dir = os.path.join(sub_dir, parsed[0])
+        for raw, target, sub_dir, abs_path in self._get_gp_vcs_develops():
+            target_sub_dir = os.path.join(sub_dir, target)
             vcs_type = raw.split('+', 1)[0]
             self._extract_vcs_source(vcs_type, abs_path,
                                      target_dir, target_sub_dir, extracted)

@@ -147,6 +147,16 @@ class TestExtraction(RecipeTestCase):
         self.assertEqual(conf.get(self.recipe.name, 'recipe'),
                          'anybox.recipe.odoo[other]:server')
 
+    def test_prepare_extracted_buildout_no_extras(self):
+        self.make_recipe(version='local mainsoftware')
+        target_dir = self.extract_target_dir
+        self.recipe.options['recipe'] = 'anybox.recipe.odoo:server'
+
+        conf = ConfigParser()
+        self.recipe._extract_sources(conf, target_dir, set())
+        self.assertEqual(conf.get(self.recipe.name, 'recipe'),
+                         'anybox.recipe.odoo:server')
+
     def test_extract_downloads_to(self):
         """Test the whole freeze method."""
 
@@ -154,7 +164,8 @@ class TestExtraction(RecipeTestCase):
             version='pr_fakevcs http://main.soft.example odooo refspec',
             addons="pr_fakevcs http://repo.example target rev1\n"
             "local somwehere\n"
-            "pr_fakevcs http://repo2.example stdln rev2 group=stdl"
+            "pr_fakevcs http://repo2.example stdln rev2 group=stdl\n"
+            "pr_fakevcs http://repo2.example stdln2 rev2 group=stdl"
         )
         os.mkdir(self.recipe.parts)
         os.mkdir(os.path.join(self.recipe.openerp_dir))

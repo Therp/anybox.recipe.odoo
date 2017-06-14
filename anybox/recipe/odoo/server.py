@@ -273,7 +273,7 @@ conf = odoo.tools.config
         desc = self._get_or_create_script('odoo_starter',
                                           name=qualified_name)[1]
 
-        arguments = '%s, %s, version=%r, gevent_script_path=%s' % (
+        arguments = '%r, %r, version=%r, gevent_script_path=%r' % (
             self._relativitize(self._get_server_command()),
             self._relativitize(self.config_path),
             self.major_version,
@@ -307,7 +307,7 @@ conf = odoo.tools.config
         """
         desc = self._get_or_create_script('odoo_tester',
                                           name=qualified_name)[1]
-        arguments = '%s, %s, version=%r, just_test=True' % (
+        arguments = '%r, %r, version=%r, just_test=True' % (
             self._relativitize(self._get_server_command()),
             self._relativitize(self.config_path),
             self.major_version)
@@ -445,8 +445,10 @@ conf = odoo.tools.config
         initialization = os.linesep.join((
             "",
             "from anybox.recipe.odoo.runtime.session import Session",
-            "session = Session(%s, base)" % self._relativitize(
-                self.config_path),
+            "session = Session(%s, %r)" % (
+                self._relativitize(self.config_path),
+                self._relativitize(self.buildout_dir),
+            ),
             "if len(sys.argv) <= 1:",
             "    print('To start the Odoo working session, just do:')",
             "    print('    session.open(db=DATABASE_NAME)')",
@@ -494,8 +496,10 @@ conf = odoo.tools.config
         common_init = os.linesep.join((
             "",
             "from anybox.recipe.odoo.runtime.session import Session",
-            "session = Session(%s, base)" % self._relativitize(
-                self.config_path)))
+            "session = Session(%r, %r)" % (
+                self._relativitize(self.config_path),
+                self._relativitize(self.buildout_dir)),
+        ))
 
         for script_name, desc in self.odoo_scripts.items():
             initialization = desc.get('initialization', common_init)

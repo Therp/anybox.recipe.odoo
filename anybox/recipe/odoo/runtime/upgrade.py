@@ -20,7 +20,7 @@ from .session import Session
 DEFAULT_LOG_FILE = 'upgrade.log'
 
 
-def upgrade(upgrade_script, upgrade_callable, conf):
+def upgrade(upgrade_script, upgrade_callable, conf, buildout_dir):
     """Run the upgrade from a source file.
 
     All arguments are set in the standalone script produced by buildout through
@@ -39,6 +39,7 @@ def upgrade(upgrade_script, upgrade_callable, conf):
       Both ``None`` and 0 are interpreted as success.
 
     * ``conf``: path to the Odoo configuration file (managed by the recipe)
+    * ``buildout_dir``: directory of the buildout
     """
 
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter,

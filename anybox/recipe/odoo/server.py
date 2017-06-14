@@ -273,7 +273,7 @@ conf = odoo.tools.config
         desc = self._get_or_create_script('odoo_starter',
                                           name=qualified_name)[1]
 
-        arguments = '%r, %r, version=%r, gevent_script_path=%r' % (
+        arguments = '%s, %s, version=%r, gevent_script_path=%s' % (
             self._relativitize(self._get_server_command()),
             self._relativitize(self.config_path),
             self.major_version,
@@ -307,11 +307,11 @@ conf = odoo.tools.config
         """
         desc = self._get_or_create_script('odoo_tester',
                                           name=qualified_name)[1]
-        arguments = '%r, %r, version=%r, just_test=True' % (
+        arguments = '%s, %s, version=%r, just_test=True' % (
             self._relativitize(self._get_server_command()),
             self._relativitize(self.config_path),
             self.major_version)
-        arguments += ', gevent_script_path=%r' % self._relativitize(
+        arguments += ', gevent_script_path=%s' % self._relativitize(
             self.gevent_script_path)
 
         desc.update(
@@ -337,7 +337,7 @@ conf = odoo.tools.config
         script_source_path = self.make_absolute(script[0])
         desc.update(
             entry='odoo_upgrader',
-            arguments='%r, %r, %r, %r' % (
+            arguments='%s, %r, %s, %s' % (
                 self._relativitize(script_source_path), script[1],
                 self._relativitize(self.config_path),
                 self._relativitize(self.buildout_dir)),
@@ -427,7 +427,7 @@ conf = odoo.tools.config
         desc = self._get_or_create_script('odoo_cron_worker',
                                           name=qualified_name)[1]
         desc.update(entry='odoo_cron_worker',
-                    arguments='%r, %r' % (
+                    arguments='%s, %s' % (
                         self._relativitize(script_src),
                         self._relativitize(self.config_path)
                     ),
@@ -445,7 +445,7 @@ conf = odoo.tools.config
         initialization = os.linesep.join((
             "",
             "from anybox.recipe.odoo.runtime.session import Session",
-            "session = Session(%s, %r)" % (
+            "session = Session(%s, %s)" % (
                 self._relativitize(self.config_path),
                 self._relativitize(self.buildout_dir),
             ),
@@ -496,7 +496,7 @@ conf = odoo.tools.config
         common_init = os.linesep.join((
             "",
             "from anybox.recipe.odoo.runtime.session import Session",
-            "session = Session(%r, %r)" % (
+            "session = Session(%s, %s)" % (
                 self._relativitize(self.config_path),
                 self._relativitize(self.buildout_dir)),
         ))

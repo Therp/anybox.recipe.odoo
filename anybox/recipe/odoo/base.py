@@ -1633,7 +1633,7 @@ class BaseRecipe(object):
             os.path.relpath(
                 addons_path,
                 os.path.join(
-                    self.odoo_dir,
+                    self.bin_dir,
                     'openerp' if 'openerp' in addons_path else 'odoo'
                 ))
             if self._relative_paths
